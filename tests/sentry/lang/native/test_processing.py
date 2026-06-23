@@ -13,6 +13,7 @@ import pytest
 
 from sentry.lang.native.processing import (
     ELECTRON_FIRST_MODULE_REWRITE_RULES,
+    _handle_response_status,
     _merge_image,
     get_frames_for_symbolication,
     process_native_stacktraces,
@@ -128,6 +129,64 @@ def test_merge_symbolicator_image_errors(code_file: str, error: EventErrorType) 
         "other2": "bar",
         "code_file": code_file,
     }
+
+
+def test_handle_response_status_failed_propagates_event_id() -> None:
+    """When symbolicator returns a failed status with an event_id, the id
+    must be propagated onto the event's errors list (gh-107682)."""
+
+    data: dict[str, Any] = {}
+    _handle_response_status(
+        data,
+        {
+            "status": "failed",
+            "message": "symbolicator rejected request",
+            "event_id": "0123456789abcdef0123456789abcdef",
+        },
+    )
+
+    assert len(data["errors"]) == 1
+    err = data["errors"][0]
+    assert err["type"] == EventErrorType.NATIVE_SYMBOLICATOR_FAILED.value
+    assert err["sentry_event_id"] == "0123456789abcdef0123456789abcdef"
+
+
+def test_handle_response_status_unexpected_status_propagates_event_id() -> None:
+    """When symbolicator returns an unexpected status, the event_id is
+    attached as a NATIVE_INTERNAL_FAILURE error."""
+
+    data: dict[str, Any] = {}
+    _handle_response_status(
+        data,
+        {
+            "status": "mystery",
+            "event_id": "abcdefabcdefabcdefabcdefabcdefab",
+        },
+    )
+
+    assert len(data["errors"]) == 1
+    err = data["errors"][0]
+    assert err["type"] == EventErrorType.NATIVE_INTERNAL_FAILURE.value
+    assert err["sentry_event_id"] == "abcdefabcdefabcdefabcdefabcdefab"
+
+
+def test_handle_response_status_omits_event_id_when_missing() -> None:
+    """When the response has no event_id, the error entry should not carry a
+    sentry_event_id field."""
+
+    data: dict[str, Any] = {}
+    _handle_response_status(
+        data,
+        {
+            "status": "failed",
+            "message": "no event id available",
+        },
+    )
+
+    assert len(data["errors"]) == 1
+    err = data["errors"][0]
+    assert err["type"] == EventErrorType.NATIVE_SYMBOLICATOR_FAILED.value
+    assert "sentry_event_id" not in err
 
 
 @django_db_all

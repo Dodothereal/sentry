@@ -489,9 +489,13 @@ class SymbolicatorSession:
                 else:
                     with sentry_sdk.isolation_scope():
                         sentry_sdk.set_extra("symbolicator_response", response.text)
-                        sentry_sdk.capture_message("Symbolicator request failed")
+                        event_id = sentry_sdk.capture_message("Symbolicator request failed")
 
-                    json = {"status": "failed", "message": "internal server error"}
+                    json = {
+                        "status": "failed",
+                        "message": "internal server error",
+                        "event_id": str(event_id) if event_id is not None else None,
+                    }
 
                 return json
             except (OSError, RequestException) as e:

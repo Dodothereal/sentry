@@ -84,10 +84,14 @@ def _handle_response_status(event_data, response_json):
         error = SymbolicationFailed(
             message=response_json.get("message") or None,
             type=EventErrorType.NATIVE_SYMBOLICATOR_FAILED,
+            event_id=response_json.get("event_id"),
         )
     else:
         logger.error("Unexpected symbolicator status: %s", response_json["status"])
-        error = SymbolicationFailed(type=EventErrorType.NATIVE_INTERNAL_FAILURE)
+        error = SymbolicationFailed(
+            type=EventErrorType.NATIVE_INTERNAL_FAILURE,
+            event_id=response_json.get("event_id"),
+        )
 
     write_error(error, event_data)
 
